@@ -3,10 +3,9 @@
 #include <linux/string.h>
 #include <sound/control.h>
 
+#include "dice.h"
 #include "../fcp.h"
 #include "../avc.h"
-#include "dice.h"
-#include "avc.h"
 
 struct __attribute__ ((__packed__)) avc_su_cmd {
 	u8 ctype;
@@ -25,6 +24,22 @@ struct __attribute__ ((__packed__)) avc_su_tc_vendor_cmd {
 	u16 cmd_id;
 };
 
+static int dice_get_vendor_id(struct snd_dice* dice)
+{
+	struct fw_csr_iterator it;
+	int key, val, vendor_id;
+
+	vendor_id = 0;
+	fw_csr_iterator_init(&it, dice->unit->directory);
+	while (fw_csr_iterator_next(&it, &key, &val)) {
+		if (key == CSR_VENDOR) {
+			vendor_id = val;
+			return vendor_id;
+		}
+	}
+	return -1;
+}
+
 /**
  * dice_avc_vendor_spec_cmd - send vendor specific AV/C command
  * @dice
@@ -37,7 +52,7 @@ struct __attribute__ ((__packed__)) avc_su_tc_vendor_cmd {
  * 				(apart from the command header which is already checked (bits1-9)), this bitmap will be
  * 				shifted accordingly (i.e. use BIT(0...) to address the bytes within the response buffer).
  */
-static int dice_avc_vendor_spec_cmd(struct dice* dice, struct avc_su_tc_vendor_cmd* cmd,
+static int dice_avc_vendor_spec_cmd(struct snd_dice* dice, struct avc_su_tc_vendor_cmd* cmd,
 										void* operands, size_t op_size,
 										void* response, size_t resp_size,
 										unsigned int resp_match_bytes)
@@ -74,7 +89,7 @@ static int dice_avc_vendor_spec_cmd(struct dice* dice, struct avc_su_tc_vendor_c
 		goto error;
 	}
 	if (err < rx_size) {
-		dev_err(&dice->unit->device, "short FCP response (%#x != %#x)\n", err, rx_size);
+		dev_err(&dice->unit->device, "short FCP response (%#x != %#lx)\n", err, rx_size);
 		err = -EIO;
 		goto error;
 	}
@@ -180,7 +195,7 @@ struct weiss_cmd_attr_info {	// R
 	};
 };
 
-static int weiss_dice_write_param(struct dice* dice, struct weiss_cmd_param_op* param)
+static int weiss_dice_write_param(struct snd_dice* dice, struct weiss_cmd_param_op* param)
 {
 	int err;
 	u8 i;
@@ -193,7 +208,7 @@ static int weiss_dice_write_param(struct dice* dice, struct weiss_cmd_param_op* 
 				.subunit_id = AVC_SU_ID_IGNORE,
 				.opcode = AVC_CMD_VENDOR_DEPENDENT,
 			},
-			.vendor_id = dice->vendor,
+			.vendor_id = dice_get_vendor_id(dice),
 		},
 		.class_id = TC_VSAVC_CLASS_GENERAL,
 		.seq_id = 0xff,
@@ -213,7 +228,7 @@ static int weiss_dice_write_param(struct dice* dice, struct weiss_cmd_param_op* 
 	return err;
 }
 
-static int weiss_dice_read_param(struct dice* dice, struct weiss_cmd_param_op* param)
+static int weiss_dice_read_param(struct snd_dice* dice, struct weiss_cmd_param_op* param)
 {
 	int err;
 	u8 i;
@@ -226,7 +241,7 @@ static int weiss_dice_read_param(struct dice* dice, struct weiss_cmd_param_op* p
 				.subunit_id = AVC_SU_ID_IGNORE,
 				.opcode = AVC_CMD_VENDOR_DEPENDENT,
 			},
-			.vendor_id = dice->vendor,
+			.vendor_id = dice_get_vendor_id(dice),
 		},
 		.class_id = TC_VSAVC_CLASS_GENERAL,
 		.seq_id = 0xff,
@@ -250,7 +265,7 @@ static int weiss_dice_read_param(struct dice* dice, struct weiss_cmd_param_op* p
 	}
 	return err;
 }
-static int weiss_dice_dev_const(struct dice* dice, struct weiss_cmd_dev_const* dev_const)
+static int weiss_dice_dev_const(struct snd_dice* dice, struct weiss_cmd_dev_const* dev_const)
 {
 	int err;
 	u8 i;
@@ -263,7 +278,7 @@ static int weiss_dice_dev_const(struct dice* dice, struct weiss_cmd_dev_const* d
 				.subunit_id = AVC_SU_ID_IGNORE,
 				.opcode = AVC_CMD_VENDOR_DEPENDENT,
 			},
-			.vendor_id = dice->vendor,
+			.vendor_id = dice_get_vendor_id(dice),
 		},
 		.class_id = TC_VSAVC_CLASS_GENERAL,
 		.seq_id = 0xff,
@@ -286,7 +301,7 @@ static int weiss_dice_dev_const(struct dice* dice, struct weiss_cmd_dev_const* d
 	_dev_info(&dice->unit->device, "Weiss device constitution: params:%#x,attrs:%#x\n", dev_const->num_params, dev_const->num_attrs);
 	return err;
 }
-static int weiss_dice_param_info(struct dice* dice, struct weiss_cmd_param_info* param_info)
+static int weiss_dice_param_info(struct snd_dice* dice, struct weiss_cmd_param_info* param_info)
 {
 	int err;
 	u8 i;
@@ -299,7 +314,7 @@ static int weiss_dice_param_info(struct dice* dice, struct weiss_cmd_param_info*
 				.subunit_id = AVC_SU_ID_IGNORE,
 				.opcode = AVC_CMD_VENDOR_DEPENDENT,
 			},
-			.vendor_id = dice->vendor,
+			.vendor_id = dice_get_vendor_id(dice),
 		},
 		.class_id = TC_VSAVC_CLASS_GENERAL,
 		.seq_id = 0xff,
@@ -339,7 +354,7 @@ static int weiss_dice_param_info(struct dice* dice, struct weiss_cmd_param_info*
 //	}
 	return err;
 }
-static int weiss_dice_enum_item_info(struct dice* dice, struct weiss_cmd_enum_item_info* item_info)
+static int weiss_dice_enum_item_info(struct snd_dice* dice, struct weiss_cmd_enum_item_info* item_info)
 {
 	int err;
 	u8 i;
@@ -352,7 +367,7 @@ static int weiss_dice_enum_item_info(struct dice* dice, struct weiss_cmd_enum_it
 				.subunit_id = AVC_SU_ID_IGNORE,
 				.opcode = AVC_CMD_VENDOR_DEPENDENT,
 			},
-			.vendor_id = dice->vendor,
+			.vendor_id = dice_get_vendor_id(dice),
 		},
 		.class_id = TC_VSAVC_CLASS_GENERAL,
 		.seq_id = 0xff,
@@ -395,10 +410,10 @@ static int dice_sync_src_info(struct snd_kcontrol *kcontrol,
 static int dice_sync_src_get(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_value *ucontrol)
 {
-	struct dice *dice = snd_kcontrol_chip(kcontrol);
-	int err;
-	u32 value;
-	err = dice_ctrl_get_global_clock_select(dice, &value);
+	struct snd_dice *dice = snd_kcontrol_chip(kcontrol);
+	int err = 0;
+	u32 value = 0;
+	//err = dice_ctrl_get_global_clock_select(dice, &value); //TODO
 	if (err < 0) {
 		return err;
 	}
@@ -409,10 +424,10 @@ static int dice_sync_src_get(struct snd_kcontrol *kcontrol,
 static int dice_sync_src_put(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_value *ucontrol)
 {
-	struct dice *dice = snd_kcontrol_chip(kcontrol);
+	struct snd_dice *dice = snd_kcontrol_chip(kcontrol);
 	int err = 0;
 	u32 value = ucontrol->value.enumerated.item[0] & CLOCK_SOURCE_MASK;
-	err = dice_ctrl_set_clock_source(dice, value, false);
+	//err = dice_ctrl_set_clock_source(dice, value, false); //TODO
 	if (err < 0) {
 		return err;
 	}
@@ -422,7 +437,7 @@ static int dice_sync_src_put(struct snd_kcontrol *kcontrol,
 static int dice_weiss_param_enum_info(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_info *uinfo)
 {
-	struct dice *dice = snd_kcontrol_chip(kcontrol);
+	struct snd_dice *dice = snd_kcontrol_chip(kcontrol);
 	int err;
 	struct weiss_cmd_param_info param_info = {
 		.param_id = (u32)kcontrol->private_value,
@@ -451,7 +466,7 @@ static int dice_weiss_param_enum_info(struct snd_kcontrol *kcontrol,
 static int dice_weiss_param_enum_get(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_value *ucontrol)
 {
-	struct dice *dice = snd_kcontrol_chip(kcontrol);
+	struct snd_dice *dice = snd_kcontrol_chip(kcontrol);
 	int err;
 	struct weiss_cmd_param_op param;
 	param.param_id = (u32)kcontrol->private_value;
@@ -464,7 +479,7 @@ static int dice_weiss_param_enum_get(struct snd_kcontrol *kcontrol,
 static int dice_weiss_param_enum_put(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_value *ucontrol)
 {
-	struct dice *dice = snd_kcontrol_chip(kcontrol);
+	struct snd_dice *dice = snd_kcontrol_chip(kcontrol);
 	int err;
 	struct weiss_cmd_param_op param;
 	param.param_id = (u32)kcontrol->private_value;
@@ -479,7 +494,7 @@ static int dice_weiss_param_enum_put(struct snd_kcontrol *kcontrol,
 static int dice_weiss_param_int_info(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_info *uinfo)
 {
-	struct dice *dice = snd_kcontrol_chip(kcontrol);
+	struct snd_dice *dice = snd_kcontrol_chip(kcontrol);
 	int err;
 	struct weiss_cmd_param_info param_info;
 	param_info.param_id = (u32)kcontrol->private_value;
@@ -498,7 +513,7 @@ static int dice_weiss_param_int_info(struct snd_kcontrol *kcontrol,
 static int dice_weiss_param_int_get(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_value *ucontrol)
 {
-	struct dice *dice = snd_kcontrol_chip(kcontrol);
+	struct snd_dice *dice = snd_kcontrol_chip(kcontrol);
 	int err;
 	struct weiss_cmd_param_op param;
 	param.param_id = (u32)kcontrol->private_value;
@@ -512,7 +527,7 @@ static int dice_weiss_param_int_get(struct snd_kcontrol *kcontrol,
 static int dice_weiss_param_int_put(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_value *ucontrol)
 {
-	struct dice *dice = snd_kcontrol_chip(kcontrol);
+	struct snd_dice *dice = snd_kcontrol_chip(kcontrol);
 	int err;
 	struct weiss_cmd_param_op param;
 	param.param_id = (u32)kcontrol->private_value;
@@ -528,7 +543,7 @@ static int dice_weiss_param_int_put(struct snd_kcontrol *kcontrol,
  * Weiss specific method for populating its products'
  * snd_ctl's (via custom vendor dependent AV/C commands).
  */
-static int dice_weiss_snd_ctl_construct(struct dice* dice)
+static int dice_weiss_snd_ctl_construct(struct snd_dice* dice)
 {
 	int err;
 	struct weiss_cmd_dev_const dev_const;
@@ -603,7 +618,7 @@ static int dice_weiss_snd_ctl_construct(struct dice* dice)
 
 #define OUI_WEISS		0x001c6a
 
-int dice_snd_ctl_construct(struct dice* dice)
+int dice_snd_ctl_construct(struct snd_dice* dice)
 {
 	int err = 0;
 	u32 i;
@@ -622,7 +637,7 @@ int dice_snd_ctl_construct(struct dice* dice)
 		if (err < 0)
 			return err;
 	}
-	switch (dice->vendor) {
+	switch (dice_get_vendor_id(dice)) {
 	case OUI_WEISS:
 		dice_weiss_snd_ctl_construct(dice);
 		break;
