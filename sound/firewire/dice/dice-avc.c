@@ -7,6 +7,8 @@
 #include "../fcp.h"
 #include "../avc.h"
 
+#define OUI_WEISS		0x001c6a
+
 struct __attribute__ ((__packed__)) avc_su_cmd {
 	u8 ctype;
 	unsigned subunit_type	: 5;
@@ -26,18 +28,19 @@ struct __attribute__ ((__packed__)) avc_su_tc_vendor_cmd {
 
 static int dice_get_vendor_id(struct snd_dice* dice)
 {
+	struct fw_device *fw_dev = fw_parent_device(dice->unit);
 	struct fw_csr_iterator it;
 	int key, val, vendor_id;
 
 	vendor_id = 0;
-	fw_csr_iterator_init(&it, dice->unit->directory);
+	fw_csr_iterator_init(&it, fw_dev->config_rom + 5);
 	while (fw_csr_iterator_next(&it, &key, &val)) {
 		if (key == CSR_VENDOR) {
 			vendor_id = val;
-			return vendor_id;
+			break;
 		}
 	}
-	return -1;
+	return vendor_id;
 }
 
 /**
@@ -616,7 +619,6 @@ static int dice_weiss_snd_ctl_construct(struct snd_dice* dice)
 	return 0;
 }
 
-#define OUI_WEISS		0x001c6a
 
 int dice_snd_ctl_construct(struct snd_dice* dice)
 {
