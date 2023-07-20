@@ -410,28 +410,42 @@ static int dice_sync_src_info(struct snd_kcontrol *kcontrol,
 	strcpy(uinfo->value.enumerated.name, texts[uinfo->value.enumerated.item]);
 	return 0;
 }
+
 static int dice_sync_src_get(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_value *ucontrol)
 {
 	struct snd_dice *dice = snd_kcontrol_chip(kcontrol);
 	int err = 0;
 	u32 value = 0;
-	//err = dice_ctrl_get_global_clock_select(dice, &value); //TODO
+	__be32 reg;
+
+	err = snd_dice_transaction_read_global(dice, GLOBAL_CLOCK_SELECT,
+					       &reg, sizeof(reg));
 	if (err < 0) {
 		return err;
 	}
+	value = be32_to_cpu(reg);
 	value &= CLOCK_SOURCE_MASK;
 	ucontrol->value.enumerated.item[0] = value;
 	return 0;
 }
+
 static int dice_sync_src_put(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_value *ucontrol)
 {
 	struct snd_dice *dice = snd_kcontrol_chip(kcontrol);
 	int err = 0;
+	__be32 new;
 	u32 value = ucontrol->value.enumerated.item[0] & CLOCK_SOURCE_MASK;
-	//err = dice_ctrl_set_clock_source(dice, value, false); //TODO
-	if (err < 0) {
+
+	if (completion_done(&dice->clock_accepted))
+		reinit_completion(&dice->clock_accepted);
+
+	new = cpu_to_be32(value);
+	err = snd_dice_transaction_write_global(dice, GLOBAL_CLOCK_SELECT,
+						&new, sizeof(new));
+	if (err < 0){
+		printk(KERN_INFO "dice-stream.c::dice_sync_src_put()::460::Error writing clock source.\n");
 		return err;
 	}
 	return 1;
